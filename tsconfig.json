@@ -15,21 +15,27 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./*"],
-      "@/lib/*": ["./lib/*"],
-      "@/api/*": ["./api/*"]
-    }
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
   },
   "include": [
-    "api/**/*",
     "lib/**/*",
-    "contracts/**/*"
+    "api/**/*",
+    "scripts/**/*"
   ],
   "exclude": [
     "node_modules",
     "dist",
     ".vercel"
-  ]
+  ],
+  "ts-node": {
+    "compilerOptions": {
+      "module": "commonjs"
+    }
+  }
 }

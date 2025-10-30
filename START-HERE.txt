@@ -29,6 +29,14 @@ STX WHATSAPP PAYMENT BOT - PHASE 1
    vercel login
    vercel
 
+(base) PS C:\Users\USER\Documents\clarinet\ebuka\stx-whatsapp-bot> vercel --prod
+Vercel CLI 48.6.6
+🔍  Inspect: https://vercel.com/bukas898s-projects/whatsapp-p2p/3LVHwHGRs3AVK8LTquZAimRxAfnm [3s] 
+✅  Production: https://whatsapp-p2p-4vgzxtp51-bukas898s-projects.vercel.app [3s]
+(base) PS C:\Users\USER\Documents\clarinet\ebuka\stx-whatsapp-bot> 
+
+curl -X POST https://whatsapp-p2p-4vgzxtp51-bukas898s-projects.vercel.app/api/webhook -H "Content-Type: application/x-www-form-urlencoded" -d "Body=Hello&From=whatsapp:+2348012345678&To=whatsapp:+14155238886"
+
 6. Test the webhook:
    curl -X POST https://your-app.vercel.app/api/webhook \
      -d "Body=Hello&From=whatsapp:+2348012345678"
@@ -68,3 +76,22 @@ Once Phase 1 is tested and working, we'll add:
 ===============================================
 Need help? Check PHASE-1-GUIDE.md for detailed steps!
 ===============================================
+
+
+PHASE 2
+......................................................
+SUPABASE PASSWORD:  p-2-p  CLab
+REGION: Europe
+
+PROJECT NAME: stx-whatsapp-p2p
+
+HOST:  db.oqonaljhpymhswkgtfvm.supabase.co
+
+DB NAME: postgres
+
+
+PROJECT ID: oqonaljhpymhswkgtfvm
+
+URI: postgresql://postgres:[YOUR_PASSWORD]@db.oqonaljhpymhswkgtfvm.supabase.co:5432/postgres
+
+
