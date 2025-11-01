@@ -12,6 +12,8 @@
     "test:user": "node scripts/test-user.js",
     "test:state": "node scripts/test-state.js",
     "test:transaction": "node scripts/test-transaction.js",
+    "test:contact": "node scripts/test-contact.js",
+    "test:payment": "node scripts/test-payment.js",
     "test:db": "ts-node scripts/test-database.ts",
     "deploy": "vercel --prod"
   },
