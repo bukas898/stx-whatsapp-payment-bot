@@ -1,0 +1,272 @@
+import { Clarinet, Tx, Chain, Account, types } from 'https://deno.land/x/clarinet@v1.0.0/index.ts';
+import { assertEquals } from 'https://deno.land/std@0.90.0/testing/asserts.ts';
+
+Clarinet.test({
+    name: "Can create an escrow",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const deployer = accounts.get('deployer')!;
+        const sender = accounts.get('wallet_1')!;
+        const recipient = accounts.get('wallet_2')!;
+        
+        let block = chain.mineBlock([
+            Tx.contractCall(
+                'escrow',
+                'create-escrow',
+                [
+                    types.principal(recipient.address),
+                    types.uint(1000000), // 1 STX
+                    types.uint(144), // ~24 hours
+                    types.utf8("Payment for services")
+                ],
+                sender.address
+            )
+        ]);
+        
+        // Should succeed and return escrow ID 0
+        block.receipts[0].result.expectOk().expectUint(0);
+        
+        // Check escrow was created
+        let escrowData = chain.callReadOnlyFn(
+            'escrow',
+            'get-escrow',
+            [types.uint(0)],
+            sender.address
+        );
+        
+        const escrow = escrowData.result.expectSome().expectTuple();
+        assertEquals(escrow['sender'], sender.address);
+        assertEquals(escrow['recipient'], recipient.address);
+        assertEquals(escrow['amount'], types.uint(1000000));
+        assertEquals(escrow['status'], types.ascii("active"));
+    },
+});
+
+Clarinet.test({
+    name: "Can release escrow to recipient",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const sender = accounts.get('wallet_1')!;
+        const recipient = accounts.get('wallet_2')!;
+        
+        // Create escrow
+        let block = chain.mineBlock([
+            Tx.contractCall(
+                'escrow',
+                'create-escrow',
+                [
+                    types.principal(recipient.address),
+                    types.uint(1000000),
+                    types.uint(144),
+                    types.utf8("Test payment")
+                ],
+                sender.address
+            )
+        ]);
+        
+        block.receipts[0].result.expectOk().expectUint(0);
+        
+        // Release escrow (sender can release)
+        let block2 = chain.mineBlock([
+            Tx.contractCall(
+                'escrow',
+                'release-escrow',
+                [types.uint(0)],
+                sender.address
+            )
+        ]);
+        
+        block2.receipts[0].result.expectOk().expectBool(true);
+        
+        // Check status is released
+        let status = chain.callReadOnlyFn(
+            'escrow',
+            'get-status',
+            [types.uint(0)],
+            sender.address
+        );
+        
+        status.result.expectOk().expectAscii("released");
+    },
+});
+
+Clarinet.test({
+    name: "Can refund escrow after timeout",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const sender = accounts.get('wallet_1')!;
+        const recipient = accounts.get('wallet_2')!;
+        
+        // Create escrow with short timeout
+        let block = chain.mineBlock([
+            Tx.contractCall(
+                'escrow',
+                'create-escrow',
+                [
+                    types.principal(recipient.address),
+                    types.uint(1000000),
+                    types.uint(10), // 10 blocks timeout
+                    types.utf8("Test payment")
+                ],
+                sender.address
+            )
+        ]);
+        
+        block.receipts[0].result.expectOk().expectUint(0);
+        
+        // Try to refund before timeout (should fail)
+        let block2 = chain.mineBlock([
+            Tx.contractCall(
+                'escrow',
+                'refund-escrow',
+                [types.uint(0)],
+                sender.address
+            )
+        ]);
+        
+        block2.receipts[0].result.expectErr().expectUint(107); // err-timeout-not-reached
+        
+        // Mine blocks to reach timeout
+        chain.mineEmptyBlockUntil(block.height + 11);
+        
+        // Now refund should work
+        let block3 = chain.mineBlock([
+            Tx.contractCall(
+                'escrow',
+                'refund-escrow',
+                [types.uint(0)],
+                sender.address
+            )
+        ]);
+        
+        block3.receipts[0].result.expectOk().expectBool(true);
+        
+        // Check status is refunded
+        let status = chain.callReadOnlyFn(
+            'escrow',
+            'get-status',
+            [types.uint(0)],
+            sender.address
+        );
+        
+        status.result.expectOk().expectAscii("refunded");
+    },
+});
+
+Clarinet.test({
+    name: "Only authorized parties can release escrow",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const sender = accounts.get('wallet_1')!;
+        const recipient = accounts.get('wallet_2')!;
+        const unauthorized = accounts.get('wallet_3')!;
+        
+        // Create escrow
+        let block = chain.mineBlock([
+            Tx.contractCall(
+                'escrow',
+                'create-escrow',
+                [
+                    types.principal(recipient.address),
+                    types.uint(1000000),
+                    types.uint(144),
+                    types.utf8("Test payment")
+                ],
+                sender.address
+            )
+        ]);
+        
+        block.receipts[0].result.expectOk().expectUint(0);
+        
+        // Try to release from unauthorized account (should fail)
+        let block2 = chain.mineBlock([
+            Tx.contractCall(
+                'escrow',
+                'release-escrow',
+                [types.uint(0)],
+                unauthorized.address
+            )
+        ]);
+        
+        block2.receipts[0].result.expectErr().expectUint(103); // err-not-authorized
+        
+        // Recipient should be able to release
+        let block3 = chain.mineBlock([
+            Tx.contractCall(
+                'escrow',
+                'release-escrow',
+                [types.uint(0)],
+                recipient.address
+            )
+        ]);
+        
+        block3.receipts[0].result.expectOk().expectBool(true);
+    },
+});
+
+Clarinet.test({
+    name: "Can cancel escrow before release",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const sender = accounts.get('wallet_1')!;
+        const recipient = accounts.get('wallet_2')!;
+        
+        // Create escrow
+        let block = chain.mineBlock([
+            Tx.contractCall(
+                'escrow',
+                'create-escrow',
+                [
+                    types.principal(recipient.address),
+                    types.uint(1000000),
+                    types.uint(144),
+                    types.utf8("Test payment")
+                ],
+                sender.address
+            )
+        ]);
+        
+        block.receipts[0].result.expectOk().expectUint(0);
+        
+        // Cancel escrow
+        let block2 = chain.mineBlock([
+            Tx.contractCall(
+                'escrow',
+                'cancel-escrow',
+                [types.uint(0)],
+                sender.address
+            )
+        ]);
+        
+        block2.receipts[0].result.expectOk().expectBool(true);
+        
+        // Check status is cancelled
+        let status = chain.callReadOnlyFn(
+            'escrow',
+            'get-status',
+            [types.uint(0)],
+            sender.address
+        );
+        
+        status.result.expectOk().expectAscii("cancelled");
+    },
+});
+
+Clarinet.test({
+    name: "Cannot create escrow with zero amount",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const sender = accounts.get('wallet_1')!;
+        const recipient = accounts.get('wallet_2')!;
+        
+        let block = chain.mineBlock([
+            Tx.contractCall(
+                'escrow',
+                'create-escrow',
+                [
+                    types.principal(recipient.address),
+                    types.uint(0), // Invalid: zero amount
+                    types.uint(144),
+                    types.utf8("Test payment")
+                ],
+                sender.address
+            )
+        ]);
+        
+        block.receipts[0].result.expectErr().expectUint(104); // err-invalid-amount
+    },
+});
