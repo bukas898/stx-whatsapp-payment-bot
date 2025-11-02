@@ -4,6 +4,7 @@
  * Receives WhatsApp messages from Twilio and routes them to appropriate handlers:
  * - Registration handler for new users
  * - Payment handler for payment commands
+ * - Escrow handler for escrow commands
  * - Help commands
  * 
  * Deployed on Vercel as serverless function
@@ -14,6 +15,7 @@ dotenv.config();
 
 import registrationHandler from '../lib/handlers/registration.handler.js';
 import paymentHandler from '../lib/handlers/payment.handler.js';
+import escrowHandler from '../lib/handlers/escrow.handler.js';
 import userService from '../lib/services/user.service.js';
 import whatsappService from '../lib/services/whatsapp.service.js';
 
@@ -93,6 +95,27 @@ async function processMessage(phoneNumber, messageText, messageId) {
       return;
     }
 
+    // Escrow commands - check first since they're more specific
+    if (
+      normalizedMessage.startsWith('escrow') ||
+      normalizedMessage.startsWith('release escrow') ||
+      normalizedMessage.startsWith('refund escrow') ||
+      normalizedMessage.startsWith('cancel escrow') ||
+      normalizedMessage.includes('escrow status') ||
+      normalizedMessage === 'my escrows' ||
+      normalizedMessage === 'escrows'
+    ) {
+      console.log('Routing to escrow handler');
+      const result = await escrowHandler.handleMessage(phoneNumber, messageText);
+      
+      if (result === null) {
+        await sendUnknownCommandMessage(phoneNumber);
+      } else if (result && result.message) {
+        await whatsappService.sendMessage(phoneNumber, result.message);
+      }
+      return;
+    }
+
     // Payment commands - for registered users
     console.log('Routing to payment handler');
     const result = await paymentHandler.handleMessage(phoneNumber, messageText);
@@ -145,6 +168,13 @@ async function sendHelpMessage(phoneNumber) {
         `*Sending STX*\n` +
         `• send [amount] to [name/address]\n` +
         `  Example: send 5 to John\n\n` +
+        `*Escrow (NEW!)* 🔒\n` +
+        `• escrow [amount] to [name] for [time] hours/days\n` +
+        `  Example: escrow 5 to John for 24 hours\n` +
+        `• release escrow #[id]\n` +
+        `• refund escrow #[id]\n` +
+        `• cancel escrow #[id]\n` +
+        `• my escrows - List all escrows\n\n` +
         `*Contacts*\n` +
         `• contacts - List your contacts\n` +
         `• add contact [name] [address]\n` +
@@ -170,6 +200,7 @@ async function sendUnknownCommandMessage(phoneNumber) {
     `Quick commands:\n` +
     `• balance\n` +
     `• send [amount] to [name]\n` +
+    `• escrow [amount] to [name] for [time]\n` +
     `• contacts\n` +
     `• history`;
   
@@ -183,6 +214,7 @@ export async function healthCheck(req, res) {
   return res.status(200).json({ 
     status: 'ok',
     service: 'stx-whatsapp-bot',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    features: ['payments', 'escrow', 'contacts']
   });
 }

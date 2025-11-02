@@ -16,6 +16,8 @@
     "test:payment": "node scripts/test-payment.js",
     "test:webhook": "node scripts/test-webhook.js",
     "test:escrow-service": "node scripts/test-escrow-service.js",
+    "test:webhook-escrow": "node scripts/test-webhook-escrow.js",
+    "test:escrow-handler": "node scripts/test-escrow-handler.js",
     "test:db": "ts-node scripts/test-database.ts",
     "deploy": "vercel --prod"
   },
